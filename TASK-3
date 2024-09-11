@@ -1,0 +1,143 @@
+# Import necessary libraries
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import warnings
+from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+from sklearn.metrics import confusion_matrix, classification_report, accuracy_score
+
+# Suppress warnings and configure matplotlib for inline plotting
+warnings.filterwarnings('ignore')
+%matplotlib inline
+
+# Load the dataset
+df = pd.read_csv("bank-additional.csv", delimiter=';')
+df.rename(columns={'y': 'deposit'}, inplace=True)  # Rename 'y' to 'deposit'
+print("Dataset Overview:\n", df.head())
+
+# Basic data exploration
+df.info()
+print("\nDataset Shape:", df.shape)
+print("\nData Types:\n", df.dtypes)
+print("\nDuplicated Rows:", df.duplicated().sum())
+print("\nMissing Values per Column:\n", df.isna().sum())
+
+# Separate categorical and numerical columns
+cat_cols = df.select_dtypes(include='object').columns
+num_cols = df.select_dtypes(exclude='object').columns
+print("\nCategorical Columns:\n", cat_cols)
+print("\nNumerical Columns:\n", num_cols)
+
+# Data description
+print("\nStatistical Summary (Numerical):\n", df.describe())
+print("\nStatistical Summary (Categorical):\n", df.describe(include='object'))
+
+# Histograms of numerical features
+df.hist(figsize=(10, 10), color='#00FFFF')
+plt.suptitle('Histograms of Numerical Features')
+plt.tight_layout()
+plt.show()
+
+# Bar plots of categorical features
+num_plots = len(cat_cols)
+num_rows = (num_plots + 1) // 2
+plt.figure(figsize=(20, 25))
+for i, feature in enumerate(cat_cols, 1):
+    plt.subplot(num_rows, 2, i)
+    sns.countplot(x=feature, data=df, palette='Wistia')
+    plt.title(f'Bar Plot of {feature}')
+    plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+
+# Box plots of numerical features
+df.plot(kind='box', subplots=True, layout=(2, 5), figsize=(20, 10), color='#7b3f00')
+plt.suptitle('Box Plots of Numerical Features')
+plt.tight_layout()
+plt.show()
+
+# Handle outliers using IQR for selected columns
+columns_to_filter = ['age', 'campaign', 'duration']
+Q1 = df[columns_to_filter].quantile(0.25)
+Q3 = df[columns_to_filter].quantile(0.75)
+IQR = Q3 - Q1
+df[columns_to_filter] = df[columns_to_filter][~((df[columns_to_filter] < (Q1 - 1.5 * IQR)) | (df[columns_to_filter] > (Q3 + 1.5 * IQR))).any(axis=1)]
+
+# Box plots after handling outliers
+df.plot(kind='box', subplots=True, layout=(2, 5), figsize=(20, 10), color='#808000')
+plt.suptitle('Box Plots After Handling Outliers')
+plt.tight_layout()
+plt.show()
+
+# Correlation matrix of numerical features
+numeric_df = df.drop(columns=cat_cols)  # Exclude categorical columns
+corr = numeric_df.corr()
+high_corr = corr[abs(corr) >= 0.90]
+sns.heatmap(high_corr, annot=True, cmap='Set3', linewidths=0.2)
+plt.title('Correlation Matrix (Threshold ≥ 0.90)')
+plt.tight_layout()
+plt.show()
+
+# Drop highly correlated features
+high_corr_cols = ['emp.var.rate', 'euribor3m', 'nr.employed']
+df1 = df.drop(columns=high_corr_cols)
+print("\nRemaining Columns After Dropping Highly Correlated Features:\n", df1.columns)
+
+# Label encoding for categorical features
+label_encoder = LabelEncoder()
+df_encoded = df1.apply(label_encoder.fit_transform)
+print("\nValue Counts for 'deposit':\n", df_encoded['deposit'].value_counts())
+
+# Train-test split
+X = df_encoded.drop('deposit', axis=1)
+y = df_encoded['deposit']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=1)
+print("\nTraining and Testing Data Shapes:", X_train.shape, X_test.shape, y_train.shape, y_test.shape)
+
+# Function to evaluate model
+def eval_model(y_test, y_pred):
+    print("\nModel Evaluation:")
+    print("Accuracy Score:", accuracy_score(y_test, y_pred))
+    print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
+    print("Classification Report:\n", classification_report(y_test, y_pred))
+
+# Function to print model scores
+def model_scores(model):
+    print("\nModel Training and Testing Scores:")
+    print("Training Score:", model.score(X_train, y_train))
+    print("Testing Score:", model.score(X_test, y_test))
+
+# Decision tree classifier with Gini index
+dt = DecisionTreeClassifier(criterion='gini', max_depth=5, min_samples_split=10, random_state=1)
+dt.fit(X_train, y_train)
+model_scores(dt)
+
+# Predictions and evaluation
+y_pred_dt = dt.predict(X_test)
+eval_model(y_test, y_pred_dt)
+
+# Plot decision tree
+plt.figure(figsize=(30, 10))
+plot_tree(dt, feature_names=X_train.columns, class_names=['no', 'yes'], filled=True)
+plt.title("Decision Tree (Gini)")
+plt.tight_layout()
+plt.show()
+
+# Decision tree classifier with entropy
+dt_entropy = DecisionTreeClassifier(criterion='entropy', max_depth=4, min_samples_split=15, random_state=1)
+dt_entropy.fit(X_train, y_train)
+model_scores(dt_entropy)
+
+# Predictions and evaluation
+y_pred_dt_entropy = dt_entropy.predict(X_test)
+eval_model(y_test, y_pred_dt_entropy)
+
+# Plot decision tree (entropy)
+plt.figure(figsize=(40, 20))
+plot_tree(dt_entropy, feature_names=X_train.columns, class_names=['no', 'yes'], filled=True)
+plt.title("Decision Tree (Entropy)")
+plt.tight_layout()
+plt.show()
